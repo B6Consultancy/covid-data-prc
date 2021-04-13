@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:compression="http://www.mulesoft.org/schema/mule/compression"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/compression http://www.mulesoft.org/schema/mule/compression/current/mule-compression.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="country-covid-data-impl" doc:id="b16b0f2f-0d46-4ddd-a450-155556798451" >
+		<http:request method="GET" doc:name="Request" doc:id="fc9774c7-d322-40f3-91c2-7983e5d16557" config-ref="Country_SAPI_HTTP_Request_configuration" path="/api/test"/>
+		<compression:decompress doc:name="Decompress" doc:id="c6091483-92a3-44ad-aa2b-a84a31440dfb" outputMimeType="application/csv">
+			<compression:decompressor >
+				<compression:zip-decompressor />
+			</compression:decompressor>
+		</compression:decompress>
+		<ee:transform doc:name="Transform Message" doc:id="2bdb72be-1849-4f91-9725-7757690685a8" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<batch:job jobName="covid-data-implBatch_Job" doc:id="f6823e32-78be-4aef-b080-a997e0e711d1">
+			<batch:process-records >
+				<batch:step name="Batch_Step" doc:id="7c34acd3-c3b3-44d9-8701-0732308659e8" >
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="0af5175f-57e7-4a63-a38a-b0906a8050a9" size="1000">
+						<ee:transform doc:name="Transform Message" doc:id="c46cc54c-6f99-476f-a40d-5418b7851389" >
+							<ee:message >
+								<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map {
+	"dateRep": $.dateRep as Date{format: 'dd/MM/yyyy'} as String {format: 'yyyy-MM-dd'},
+	"day": $.day,
+	"month": $.month,
+	"year": $.year,
+	"cases": $.cases as Number default 0,
+	"deaths": $.deaths as Number default 0,
+	"countriesAndTerritories": $.countriesAndTerritories,
+	"geoId": $.geoId,
+	"countryterritoryCode": $.countryterritoryCode,
+	"popData2019": $.popData2019,
+	"continentExp": $.continentExp,
+	"cumulative14DCasesPer100000": $.'Cumulative_number_for_14_days_of_COVID-19_cases_per_100000' default ""
+}]]></ee:set-payload>
+							</ee:message>
+						</ee:transform>
+						<http:request method="POST" doc:name="Request" doc:id="af00f3e1-9d1c-4623-b316-c73a003b7ef7" config-ref="DB_SAPI_HTTP_Request_configuration" path="/api/country">
+							<http:body ><![CDATA[#[output application/json --- payload]]]></http:body>
+						</http:request>
+					</batch:aggregator>
+				</batch:step>
+			</batch:process-records>
+			<batch:on-complete >
+				<logger level="INFO" doc:name="Logger" doc:id="cfd879d1-d696-4827-8f60-a4a67648cc61" />
+			</batch:on-complete>
+		</batch:job>
+	</flow>
+</mule>

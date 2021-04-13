@@ -1,0 +1,28 @@
+#%RAML 1.0
+title: covid-data-prc
+
+
+/covidData:
+  description: Retrieve Covid Data for all countries
+  post:
+    responses:
+      201:
+        body:
+          application/json:
+            example:
+              {
+                "message": "Data retieved and inserted into database successfully"
+              }
+  /{countryCode}:
+    description: Retrieve covid related data for countries. 
+    post:
+      responses:
+        201:
+          body:
+            application/json:
+              example:
+                {
+                  "message": "Data retieved and inserted into database successfully"
+                }
+        
+
