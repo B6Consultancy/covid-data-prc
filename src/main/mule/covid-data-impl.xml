@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
-	xmlns:compression="http://www.mulesoft.org/schema/mule/compression"
-	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:batch="http://www.mulesoft.org/schema/mule/batch"
+	xmlns:compression="http://www.mulesoft.org/schema/mule/compression" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
 http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
 http://www.mulesoft.org/schema/mule/compression http://www.mulesoft.org/schema/mule/compression/current/mule-compression.xsd
 http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
-http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd">
+	
 	<flow name="country-covid-data-impl" doc:id="b16b0f2f-0d46-4ddd-a450-155556798451" >
 		<http:request method="GET" doc:name="Request" doc:id="fc9774c7-d322-40f3-91c2-7983e5d16557" config-ref="Country_SAPI_HTTP_Request_configuration" path="/api/test"/>
 		<compression:decompress doc:name="Decompress" doc:id="c6091483-92a3-44ad-aa2b-a84a31440dfb" outputMimeType="application/csv">
@@ -52,9 +54,24 @@ payload map {
 						</http:request>
 					</batch:aggregator>
 				</batch:step>
+				<batch:step name="Batch_Step1" doc:id="53515f55-2943-4753-9a7f-641292587b4d" acceptPolicy="ONLY_FAILURES">
+					<batch:aggregator doc:name="Batch Aggregator" doc:id="8a263f05-6a2a-497c-9237-be6a4e2f1b86" size="100">
+						<vm:publish doc:name="Publish" doc:id="ed29ff5d-74ae-40b4-97d4-bafd1665d7c7" config-ref="VM_Config" sendCorrelationId="ALWAYS" queueName="failedRecords"/>
+					</batch:aggregator>
+				</batch:step>
 			</batch:process-records>
 			<batch:on-complete >
 				<logger level="INFO" doc:name="Logger" doc:id="cfd879d1-d696-4827-8f60-a4a67648cc61" />
+				<http:request method="POST" doc:name="Request" doc:id="67287287-5da8-4b01-acd8-2e1ff70c9bfd" config-ref="DB_SAPI_HTTP_Request_configuration" path="api/jobLogs">
+					<http:body ><![CDATA[#[output application/json ---
+{
+  "jobDate": now() as Date as String,
+	"processTime" : (payload.elapsedTimeInMillis).seconds as DateTime as String {format: "HH:mm:ss"},
+	"totalRecord" : payload.totalRecords,
+	"failedRecord" : (payload.totalRecords as Number) - (payload.successfulRecords as Number),
+	"jobName" :  "CountryWise COVID data"
+}]]]></http:body>
+				</http:request>
 			</batch:on-complete>
 		</batch:job>
 	</flow>
